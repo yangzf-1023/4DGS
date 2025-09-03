@@ -9,10 +9,10 @@ exhaust_test: True
 
 ModelParams:
   sh_degree: 3
-  source_path: "data/N3V/flame_steak"
-  model_path: "output/N3V/flame_steak"
+  source_path: "data/N3V/mast3r/flame_steak"
+  model_path: "output/N3V/mast3r/flame_steak"
   images: "images"
-  resolution: 2
+  resolution: 4
   white_background: False
   data_device: "cuda"
   eval: True

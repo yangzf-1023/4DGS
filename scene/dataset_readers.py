@@ -27,6 +27,7 @@ import torch
 from utils.general_utils import fps
 from multiprocessing.pool import ThreadPool
 import imagesize
+from collections import defaultdict
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -107,9 +108,10 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
         image_name = os.path.basename(image_path).split(".")[0]
-        image = Image.open(image_path)
+        # image = Image.open(image_path)
+        image = None
 
-        cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
+        cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image, depth=None,
                               image_path=image_path, image_name=image_name, width=width, height=height)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
@@ -147,7 +149,73 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0):
+def process_camera_info(cam_infos_unsorted, path, reading_dir):
+    """
+    Process camera info by matching image files and creating new CameraInfo objects.
+    
+    Args:
+        cam_infos_unsorted: List of CameraInfo objects.
+        path: Base directory path.
+        reading_dir: Directory containing image files.
+    
+    Returns:
+        List of CameraInfo objects (original + new).
+    """
+    # Step 1: Cache all .png files and group by cam_name
+    image_files = defaultdict(list)
+    full_dir = os.path.join(path, reading_dir)
+    for img in sorted(os.listdir(full_dir)):
+        if not img.endswith('.png'):
+            continue
+        cam_name = img.split('_')[0]  # e.g., cam00 from cam00_0000.png
+        image_files[cam_name].append(img) # cam00_0000.png
+
+    # Step 2: Create new CameraInfo objects
+    new_cam_infos = []
+    uid = max([info.uid for info in cam_infos_unsorted], default=0)  # Start UID after max existing
+
+    for cam_info in cam_infos_unsorted:
+        image_name = cam_info.image_name  # e.g., cam00_0000
+        cam_name = image_name.split('/')[-1].split('_')[0]  # e.g., cam00
+        
+        # Add original cam_info
+        new_cam_infos.append(cam_info)
+        
+        # Process matching images
+        for img in image_files.get(cam_name, []):
+            if img.split('.')[0] == image_name:
+                continue  # Skip the original image
+            uid += 1
+            temp_path = os.path.join(full_dir, img)
+            time_stamp = int(img.split('.')[0][-4:]) / 30.0
+            
+            # with Image.open(temp_path) as image:
+            #     temp_image = image.copy()
+            temp_image = None
+            
+            temp_info = CameraInfo(
+                uid=uid,
+                R=cam_info.R,
+                T=cam_info.T,
+                FovY=cam_info.FovY,
+                FovX=cam_info.FovX,
+                image=temp_image,
+                depth=None,
+                image_path=temp_path,
+                image_name=img.split('.')[0],
+                width=cam_info.width,
+                height=cam_info.height,
+                timestamp=time_stamp,
+                fl_x=cam_info.fl_x,
+                fl_y=cam_info.fl_y,
+                cx=cam_info.cx,
+                cy=cam_info.cy
+            )
+            new_cam_infos.append(temp_info)
+    
+    return new_cam_infos
+
+def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0, training_cam=['cam00', 'cam01', 'cam20', 'cam13']):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -161,11 +229,18 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0):
 
     reading_dir = "images" if images == None else images
     cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir))
+    cam_infos_unsorted = process_camera_info(cam_infos_unsorted, path, reading_dir)
+    
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+    print(f"Read {len(cam_infos)} frames from {cameras_extrinsic_file} and {cameras_intrinsic_file}.")
+    
+    assert len(cam_infos) == len(os.listdir(os.path.join(path, reading_dir))), 'Number of cameras does not match number of images in the directory.'
+    assert len(os.listdir(os.path.join(path, reading_dir))) == len(set([c.image_name for c in cam_infos])), 'Camera names do not match image names.'
 
     if eval:
-        train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
-        test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
+        print(f'training_cam: {training_cam}')
+        train_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name.split('_')[0] in training_cam]
+        test_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name.split('_')[0] not in training_cam]
     else:
         train_cam_infos = cam_infos
         test_cam_infos = []
@@ -218,7 +293,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         fovx = contents["camera_angle_x"]
         
     frames = contents["frames"]
-    tbar = tqdm(range(len(frames)))
+    tbar = tqdm(range(len(frames), ncols=80))
     def frame_read_fn(idx_frame):
         idx = idx_frame[0]
         frame = idx_frame[1]

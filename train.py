@@ -10,6 +10,8 @@
 #
 
 import os
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+os.environ["TORCH_USE_CUDA_DSA"] = "1"
 import random
 import torch
 from torch import nn
@@ -43,12 +45,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree, gaussian_dim=gaussian_dim, time_duration=time_duration, rot_4d=rot_4d, force_sh_3d=force_sh_3d, sh_degree_t=2 if pipe.eval_shfs_4d else 0)
-    scene = Scene(dataset, gaussians, num_pts=num_pts, num_pts_ratio=num_pts_ratio, time_duration=time_duration)
+    scene = Scene(dataset, gaussians, num_pts=num_pts, num_pts_ratio=num_pts_ratio, time_duration=time_duration, training_view=args.training_view)
     gaussians.training_setup(opt)
     
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
+        print("Restored gaussians from checkpoint: {}".format(checkpoint))
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
@@ -64,7 +67,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     for lambda_name in lambda_all:
         vars()[f"ema_{lambda_name.replace('lambda_','')}_for_log"] = 0.0
     
-    progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
+    progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress", ncols=110)
     first_iter += 1
         
     if pipe.env_map_res:
@@ -214,17 +217,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 if iteration == opt.iterations:
                     progress_bar.close()
 
-                # Log and save
-                test_psnr = training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), loss_dict)
-                if (iteration in testing_iterations):
-                    if test_psnr >= best_psnr:
-                        best_psnr = test_psnr
-                        print("\n[ITER {}] Saving best checkpoint".format(iteration))
-                        torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt_best.pth")
-                        
-                if (iteration in saving_iterations):
-                    print("\n[ITER {}] Saving Gaussians".format(iteration))
-                    scene.save(iteration)
+                # Log 
+                test_psnr = training_report(tb_writer, iteration, Ll1, Lssim, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), loss_dict)
+                
+                # Opacity decay
+                if args.opacity_decay and iteration > opt.densify_from_iter:
+                    opt.densify_until_iter = opt.iterations
+                    gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
                 # Densification
                 if iteration < opt.densify_until_iter and (opt.densify_until_num_points < 0 or gaussians.get_xyz.shape[0] < opt.densify_until_num_points):
@@ -237,9 +236,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                         
                     if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
                         size_threshold = 20 if iteration > opt.opacity_reset_interval else None
+                        if args.opacity_decay and not args.limited:
+                            size_threshold = None
                         gaussians.densify_and_prune(opt.densify_grad_threshold, opt.thresh_opa_prune, scene.cameras_extent, size_threshold, opt.densify_grad_t_threshold)
                     
-                    if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
+                    if (iteration % opt.opacity_reset_interval == 0 and not args.opacity_decay) or (
+                        dataset.white_background and iteration == opt.densify_from_iter):
                         gaussians.reset_opacity()
                         
                 # Optimizer step
@@ -249,6 +251,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     if pipe.env_map_res and iteration < pipe.env_optimize_until:
                         env_map_optimizer.step()
                         env_map_optimizer.zero_grad(set_to_none = True)
+                        
+                # Save chkpnt
+                if (iteration in testing_iterations):
+                    if test_psnr >= best_psnr:
+                        best_psnr = test_psnr
+                        print("\n[ITER {}] Saving best checkpoint".format(iteration))
+                        torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt_best.pth")
+                        
+                # Save Gaussians
+                if (iteration in saving_iterations):
+                    print("\n[ITER {}] Saving Gaussians".format(iteration))
+                    scene.save(iteration)
 
 def prepare_output_and_logger(args):    
     if not args.model_path:
@@ -272,10 +286,10 @@ def prepare_output_and_logger(args):
         print("Tensorboard not available: not logging progress")
     return tb_writer
 
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs, loss_dict=None):
+def training_report(tb_writer, iteration, Ll1, Lssim, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs, loss_dict=None):
     if tb_writer:
         tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar('train_loss_patches/ssim_loss', Ll1.item(), iteration)
+        tb_writer.add_scalar('train_loss_patches/ssim_loss', Lssim.item(), iteration)
         tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
         tb_writer.add_scalar('iter_time', elapsed, iteration)
         tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
@@ -299,16 +313,18 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     psnr_test_iter = 0.0
     # Report test and samples of training set
     if iteration in testing_iterations:
-        validation_configs = ({'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]},
-                              {'name': 'test', 'cameras' : [scene.getTestCameras()[idx] for idx in range(len(scene.getTestCameras()))]})
-
+        validation_configs = (
+            {'name': 'train', 'cameras': scene.getValidationCameras(tag='train')},
+            {'name': 'test', 'cameras': scene.getValidationCameras(tag='test')},
+        )
+        
         for config in validation_configs:
             if config['cameras'] and len(config['cameras']) > 0:
                 l1_test = 0.0
                 psnr_test = 0.0
                 ssim_test = 0.0
                 msssim_test = 0.0
-                for idx, batch_data in enumerate(tqdm(config['cameras'])):
+                for idx, batch_data in enumerate(tqdm(config['cameras'], ncols=80)):
                     gt_image, viewpoint = batch_data
                     gt_image = gt_image.cuda()
                     viewpoint = viewpoint.cuda()
@@ -316,12 +332,12 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
                     render_pkg = renderFunc(viewpoint, scene.gaussians, *renderArgs)
                     image = torch.clamp(render_pkg["render"], 0.0, 1.0)
                     
-                    depth = easy_cmap(render_pkg['depth'][0])
-                    alpha = torch.clamp(render_pkg['alpha'], 0.0, 1.0).repeat(3,1,1)
-                    if tb_writer and (idx < 5):
-                        grid = [gt_image, image, alpha, depth]
-                        grid = make_grid(grid, nrow=2)
-                        tb_writer.add_images(config['name'] + "_view_{}/gt_vs_render".format(viewpoint.image_name), grid[None], global_step=iteration)
+                    # depth = easy_cmap(render_pkg['depth'][0])
+                    # alpha = torch.clamp(render_pkg['alpha'], 0.0, 1.0).repeat(3,1,1)
+                    # if tb_writer and (idx < 5):
+                    #     grid = [gt_image, image, alpha, depth]
+                    #     grid = make_grid(grid, nrow=2)
+                    #     tb_writer.add_images(config['name'] + "_view_{}/gt_vs_render".format(viewpoint.image_name), grid[None], global_step=iteration)
                             
                     l1_test += l1_loss(image, gt_image).mean().double()
                     psnr_test += psnr(image, gt_image).mean().double()
@@ -344,11 +360,11 @@ def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_i
     return psnr_test_iter
 
 def setup_seed(seed):
-     torch.manual_seed(seed)
-     torch.cuda.manual_seed_all(seed)
-     np.random.seed(seed)
-     random.seed(seed)
-     torch.backends.cudnn.deterministic = True
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -374,6 +390,19 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=6666)
     parser.add_argument("--exhaust_test", action="store_true")
     
+    parser.add_argument("--output_dir", type=str, default="")
+    parser.add_argument("--training_view", type=str, default="",
+                        help="Comma-separated list of cameras to use for validation, \
+                            e.g. '0,1,2'. If not specified, all cameras will be used.")
+    
+    # opacity decay
+    parser.add_argument("--opacity_decay", action="store_true", default=False)
+    parser.add_argument("--opacity_decay_factor", type=float, default=0.99)
+    parser.add_argument("--decay_mode", type=str, default=None, help="Decay mode for opacity decay")
+    parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene")
+    parser.add_argument('--p', default=0.5, type=float, help='p')
+    parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
+    
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
         
@@ -390,6 +419,23 @@ if __name__ == "__main__":
         
     if args.exhaust_test:
         args.test_iterations = args.test_iterations + [i for i in range(0,op.iterations,500)]
+        
+    if args.output_dir:
+        args.model_path = os.path.join(args.model_path, args.output_dir)
+    
+    if os.path.exists(args.model_path):
+        assert False, f"Output folder {args.model_path} already exists"
+    os.makedirs(args.model_path, exist_ok=True)
+        
+    if args.training_view: # 指定的是训练视角
+        args.training_view = [f"cam{str(int(cam)).zfill(2)}" for cam in sorted(args.training_view.split(','))]
+    else:
+        args.training_view = [f"cam{str(int(cam)).zfill(2)}" for cam in range(0, args.n_views, 1)]
+    
+    params_file = os.path.join(args.model_path, "training_params.txt")
+    
+    with open(params_file, "w") as f:
+        f.write(str(args))
     
     setup_seed(args.seed)
     
