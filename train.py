@@ -67,7 +67,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     for lambda_name in lambda_all:
         vars()[f"ema_{lambda_name.replace('lambda_','')}_for_log"] = 0.0
     
-    progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress", ncols=110)
+    progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training", ncols=110)
     first_iter += 1
         
     if pipe.env_map_res:
