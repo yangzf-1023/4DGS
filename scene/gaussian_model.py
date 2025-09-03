@@ -21,6 +21,7 @@ from simple_knn._C import distCUDA2
 from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 from utils.sh_utils import sh_channels_4d
+import math
 
 class GaussianModel:
 
@@ -424,6 +425,21 @@ class GaussianModel:
                 self._rotation_r = optimizable_tensors['rotation_r']
             self.t_gradient_accum = self.t_gradient_accum[valid_points_mask]
 
+    def opacity_decay(self, factor=0.99, mode=None, p=2, offset=0.005):
+        old_opacity = self.get_opacity
+        if mode is None:
+            opacity = old_opacity * factor
+        elif mode == 'poly': # [factor - offset, 1 - offset]
+            opacity = old_opacity * (factor ** ((1 - old_opacity) ** p) - offset) 
+        elif mode == 'exp': # [a = factor - offset, b = factor]
+            assert p != 0
+            c = offset / (math.exp(p) - 1)
+            d = factor - offset - c
+            opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
+        else:
+            assert False, "Unknown mode for opacity decay: {}".format(mode)
+        self._opacity.data = self.inverse_opacity_activation(opacity)
+    
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
