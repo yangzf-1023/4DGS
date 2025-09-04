@@ -258,6 +258,23 @@ class GaussianModel:
                                                               self._rotation_r,
                                                               dt = timestamp - self.get_t)
 
+    def construct_list_of_attributes(self):
+        l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
+        # All channels except the 3 DC
+        for i in range(self._features_dc.shape[1]*self._features_dc.shape[2]):
+            l.append('f_dc_{}'.format(i))
+
+        if self.active_sh_degree > 0:
+            for i in range(self._features_rest.shape[1]*self._features_rest.shape[2]):
+               l.append('f_rest_{}'.format(i))
+        l.append('opacity')
+        for i in range(self._scaling.shape[1]):
+            l.append('scale_{}'.format(i))
+        for i in range(self._rotation.shape[1]):
+            l.append('rot_{}'.format(i))
+        return l
+
+    
     def save_ply(self, path):
         mkdir_p(os.path.dirname(path))
         xyz = self.get_xyz.detach().cpu().numpy()
