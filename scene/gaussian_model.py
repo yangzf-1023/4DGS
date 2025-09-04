@@ -92,6 +92,13 @@ class GaussianModel:
         self.active_sh_degree_t = 0
         self.max_sh_degree_t = sh_degree_t
         
+        self.coefficient = nn.Sequential(
+            nn.Linear(1, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid(),
+        ).cuda()
+        
         self.setup_functions()
 
     def capture(self):
@@ -109,6 +116,7 @@ class GaussianModel:
                 self.denom,
                 self.optimizer.state_dict(),
                 self.spatial_lr_scale,
+                self.coefficient.state_dict(),
             )
         elif self.gaussian_dim == 4:
             return (
@@ -130,7 +138,8 @@ class GaussianModel:
                 self._rotation_r,
                 self.rot_4d,
                 self.env_map,
-                self.active_sh_degree_t
+                self.active_sh_degree_t,
+                self.coefficient.state_dict(),
             )
     
     def restore(self, model_args, training_args):
@@ -146,7 +155,8 @@ class GaussianModel:
             xyz_gradient_accum, 
             denom,
             opt_dict, 
-            self.spatial_lr_scale) = model_args
+            self.spatial_lr_scale,
+            coefficient_dict) = model_args
         elif self.gaussian_dim == 4:
             (self.active_sh_degree, 
             self._xyz, 
@@ -166,13 +176,15 @@ class GaussianModel:
             self._rotation_r,
             self.rot_4d,
             self.env_map,
-            self.active_sh_degree_t) = model_args
+            self.active_sh_degree_t,
+            coefficient_dict) = model_args
         if training_args is not None:
             self.training_setup(training_args)
             self.xyz_gradient_accum = xyz_gradient_accum
             self.t_gradient_accum = t_gradient_accum
             self.denom = denom
             self.optimizer.load_state_dict(opt_dict)
+            self.coefficient.load_state_dict(coefficient_dict)
 
     @property
     def get_scaling(self):
@@ -246,6 +258,30 @@ class GaussianModel:
                                                               self._rotation_r,
                                                               dt = timestamp - self.get_t)
 
+    def save_ply(self, path):
+        mkdir_p(os.path.dirname(path))
+        xyz = self.get_xyz.detach().cpu().numpy()
+        normals = np.zeros_like(xyz)
+        f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        if self.active_sh_degree != 0:
+            f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        opacities = self._opacity.detach().cpu().numpy()
+        scale = self._scaling.detach().cpu().numpy()
+        rotation = self._rotation.detach().cpu().numpy()
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
+
+        elements = np.empty(xyz.shape[0], dtype=dtype_full)
+
+        # TODO: may need to add empty shs for SIBR_viewer?
+        if self.active_sh_degree > 0:
+            attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        else:
+            attributes = np.concatenate((xyz, normals, f_dc, opacities, scale, rotation), axis=1)
+        elements[:] = list(map(tuple, attributes))
+        el = PlyElement.describe(elements, 'vertex')
+        PlyData([el]).write(path)
+    
     def oneupSHdegree(self):
         if self.active_sh_degree < self.max_sh_degree:
             self.active_sh_degree += 1
@@ -346,6 +382,8 @@ class GaussianModel:
             if self.rot_4d:
                 l.append({'params': [self._rotation_r], 'lr': training_args.rotation_lr, "name": "rotation_r"})
 
+        l.append({'params': self.coefficient.parameters(), 'lr': training_args.coefficient_lr, "name": "coefficient"})
+        
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
@@ -373,6 +411,9 @@ class GaussianModel:
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
             if group["name"] == name:
+                if group['name'] == 'coefficient':
+                    optimizable_tensors[group['name']] = group['params']
+                    continue
                 stored_state = self.optimizer.state.get(group['params'][0], None)
                 stored_state["exp_avg"] = torch.zeros_like(tensor)
                 stored_state["exp_avg_sq"] = torch.zeros_like(tensor)
@@ -387,6 +428,9 @@ class GaussianModel:
     def _prune_optimizer(self, mask):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
+            if group["name"] == "coefficient":
+                optimizable_tensors[group["name"]] = group["params"]
+                continue
             stored_state = self.optimizer.state.get(group['params'][0], None)
             if stored_state is not None:
                 stored_state["exp_avg"] = stored_state["exp_avg"][mask]
@@ -436,6 +480,10 @@ class GaussianModel:
             c = offset / (math.exp(p) - 1)
             d = factor - offset - c
             opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
+        elif mode == 'mlp': # [factor, 1]
+            sigmoid_output = self.coefficient(old_opacity.unsqueeze(-1)).squeeze(-1)  # [num_points]
+            coefficient = factor + (1 - factor) * sigmoid_output
+            opacity = old_opacity * coefficient
         else:
             assert False, "Unknown mode for opacity decay: {}".format(mode)
         self._opacity.data = self.inverse_opacity_activation(opacity)
@@ -443,7 +491,10 @@ class GaussianModel:
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
-            assert len(group["params"]) == 1
+            if group['name'] == 'coefficient':
+                optimizable_tensors[group['name']] = group['params']
+                continue
+            assert len(group["params"]) == 1, print(group["params"])
             extension_tensor = tensors_dict[group["name"]]
             stored_state = self.optimizer.state.get(group['params'][0], None)
             if stored_state is not None:

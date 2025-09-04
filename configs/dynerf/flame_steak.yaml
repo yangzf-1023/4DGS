@@ -40,6 +40,7 @@ OptimizationParams:
   position_lr_max_steps: 30_000
   feature_lr: 0.0025
   opacity_lr: 0.05
+  coefficient_lr: 1e-5
   scaling_lr: 0.005
   rotation_lr: 0.001
   percent_dense: 0.01
