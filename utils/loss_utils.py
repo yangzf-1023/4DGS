@@ -11,6 +11,8 @@
 
 import torch
 import torch.nn.functional as F
+from torch import nn
+from tqdm import tqdm
 from torch.autograd import Variable
 from math import exp
 from torchmetrics import MultiScaleStructuralSimilarityIndexMeasure
@@ -69,3 +71,20 @@ def msssim(rgb, gts):
     # assert (rgb.max() <= 1.05 and rgb.min() >= -0.05)
     # assert (gts.max() <= 1.05 and gts.min() >= -0.05)
     return ms_ssim(rgb, gts).item()
+
+def pretrain_coefficient(coefficient, factor=0.990, p=0.5, offset=0.005, num_epochs=1000):
+    x = torch.linspace(0, 1, 1000).reshape(-1, 1).cuda()
+    y = factor ** ((1 - x) ** p) - offset
+    
+    optimizer = torch.optim.Adam(coefficient.parameters(), lr=0.001)
+    criterion = nn.MSELoss()
+    
+    for epoch in tqdm(range(num_epochs), ncols=80):
+        optimizer.zero_grad()
+        pred = coefficient(x)
+        loss = criterion(pred, y)
+        loss.backward()
+        optimizer.step()
+        
+        # if epoch % 100 == 0:
+    print(f'Epoch {epoch}, Loss: {loss.item():.6f}')
