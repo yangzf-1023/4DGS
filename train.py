@@ -15,7 +15,7 @@ os.environ["TORCH_USE_CUDA_DSA"] = "1"
 import random
 import torch
 from torch import nn
-from utils.loss_utils import l1_loss, ssim, msssim
+from utils.loss_utils import l1_loss, ssim, msssim, pretrain_coefficient
 from gaussian_renderer import render
 import sys
 from scene import Scene, GaussianModel
@@ -44,6 +44,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
+    
+    if args.opacity_decay and args.decay_mode == "mlp":
+        coefficient = nn.Sequential(
+            nn.Linear(1, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1),
+            nn.Sigmoid(),
+        ).cuda()
+        if args.pretrain:
+            pretrain_coefficient(coefficient)
+    else:
+        coefficient = None
+        
     gaussians = GaussianModel(dataset.sh_degree, gaussian_dim=gaussian_dim, time_duration=time_duration, rot_4d=rot_4d, force_sh_3d=force_sh_3d, sh_degree_t=2 if pipe.eval_shfs_4d else 0)
     scene = Scene(dataset, gaussians, num_pts=num_pts, num_pts_ratio=num_pts_ratio, time_duration=time_duration, training_view=args.training_view)
     gaussians.training_setup(opt)
@@ -185,8 +198,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     batch_t_grad = gaussians._t.grad.clone().detach()
             
             iter_end.record()
-            loss_dict = {"Ll1": Ll1,
-                        "Lssim": Lssim}
+            loss_dict = {"Ll1": Ll1, "Lssim": Lssim}
 
             with torch.no_grad():
                 psnr_for_log = psnr(image, gt_image).mean().double()
@@ -203,9 +215,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                         
                 if iteration % 10 == 0:
                     postfix = {"Loss": f"{ema_loss_for_log:.{7}f}",
-                                            "PSNR": f"{psnr_for_log:.{2}f}",
-                                            "Ll1": f"{ema_l1loss_for_log:.{4}f}",
-                                            "Lssim": f"{ema_ssimloss_for_log:.{4}f}",}
+                                "PSNR": f"{psnr_for_log:.{2}f}",
+                                "Ll1": f"{ema_l1loss_for_log:.{4}f}",
+                                "Lssim": f"{ema_ssimloss_for_log:.{4}f}",}
                     
                     for lambda_name in lambda_all:
                         if opt.__dict__[lambda_name] > 0:
