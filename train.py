@@ -176,6 +176,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 loss = loss / batch_size
                 loss.backward()
+                if gaussians.coefficient is not None:
+                    for name, param in gaussians.coefficient.named_parameters():
+                        if param.grad is None:
+                            print(f'Parameter {name} has no gradient!')
+                    for name, param in gaussians.coefficient.named_parameters():
+                        assert param.requires_grad, f'Parameter {name} is frozen!'
+                        
                 batch_point_grad.append(torch.norm(viewspace_point_tensor.grad[:,:2], dim=-1))
                 batch_radii.append(radii)
                 batch_visibility_filter.append(visibility_filter)
