@@ -35,6 +35,23 @@ try:
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
+    
+def check_optimizer_gradients(optimizer, prefix=""):
+    """
+    检查优化器中所有参数的梯度状态。
+    
+    Args:
+        optimizer: PyTorch 优化器（例如 torch.optim.Adam）
+        prefix: 可选的字符串前缀，用于日志区分
+    """
+    print(f"{prefix}Checking optimizer gradients:")
+    for group_idx, param_group in enumerate(optimizer.param_groups):
+        print(f"  Parameter group {group_idx}:")
+        for param_idx, param in enumerate(param_group['params']):
+            param_shape = list(param.shape)
+            requires_grad = param.requires_grad
+            grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.6f}"
+            print(f"    Param {param_idx}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
              gaussian_dim, time_duration, num_pts, num_pts_ratio, rot_4d, force_sh_3d, batch_size):
@@ -116,6 +133,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             batch_visibility_filter = []
             batch_radii = []
             
+            # Opacity decay
+            if args.opacity_decay and iteration > opt.densify_from_iter:
+                opt.densify_until_iter = opt.iterations
+                gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
+            
             for batch_idx in range(batch_size):
                 gt_image, viewpoint_cam = batch_data[batch_idx]
                 gt_image = gt_image.cuda()
@@ -176,13 +198,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 loss = loss / batch_size
                 loss.backward()
-                if gaussians.coefficient is not None:
-                    for name, param in gaussians.coefficient.named_parameters():
-                        if param.grad is None:
-                            print(f'Parameter {name} has no gradient!')
-                    for name, param in gaussians.coefficient.named_parameters():
-                        assert param.requires_grad, f'Parameter {name} is frozen!'
-                        
+                
+                # check_optimizer_gradients(gaussians.optimizer, prefix=f"Iter {iteration} - ")
+                
                 batch_point_grad.append(torch.norm(viewspace_point_tensor.grad[:,:2], dim=-1))
                 batch_radii.append(radii)
                 batch_visibility_filter.append(visibility_filter)
@@ -239,10 +257,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 # Log 
                 test_psnr = training_report(tb_writer, iteration, Ll1, Lssim, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), loss_dict)
                 
-                # Opacity decay
-                if args.opacity_decay and iteration > opt.densify_from_iter:
-                    opt.densify_until_iter = opt.iterations
-                    gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
+                # # Opacity decay
+                # if args.opacity_decay and iteration > opt.densify_from_iter:
+                #     opt.densify_until_iter = opt.iterations
+                #     gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
                 # Densification
                 if iteration < opt.densify_until_iter and (opt.densify_until_num_points < 0 or gaussians.get_xyz.shape[0] < opt.densify_until_num_points):

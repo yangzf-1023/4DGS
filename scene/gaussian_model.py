@@ -481,6 +481,7 @@ class GaussianModel:
 
     def opacity_decay(self, factor=0.99, mode=None, p=2, offset=0.005):
         old_opacity = self.get_opacity
+        # print(old_opacity.shape)
         if mode is None:
             opacity = old_opacity * factor
         elif mode == 'poly': # [factor - offset, 1 - offset]
