@@ -61,7 +61,7 @@ class GaussianModel:
         self.rotation_activation = torch.nn.functional.normalize
 
 
-    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0):
+    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0, coefficient=None):
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree  
         self._xyz = torch.empty(0)
@@ -92,12 +92,7 @@ class GaussianModel:
         self.active_sh_degree_t = 0
         self.max_sh_degree_t = sh_degree_t
         
-        self.coefficient = nn.Sequential(
-            nn.Linear(1, 16),
-            nn.ReLU(),
-            nn.Linear(16, 1),
-            nn.Sigmoid(),
-        ).cuda()
+        self.coefficient = coefficient
         
         self.setup_functions()
 
@@ -116,7 +111,7 @@ class GaussianModel:
                 self.denom,
                 self.optimizer.state_dict(),
                 self.spatial_lr_scale,
-                self.coefficient.state_dict(),
+                None if self.coefficient is None else self.coefficient.state_dict(),
             )
         elif self.gaussian_dim == 4:
             return (
@@ -139,7 +134,7 @@ class GaussianModel:
                 self.rot_4d,
                 self.env_map,
                 self.active_sh_degree_t,
-                self.coefficient.state_dict(),
+                None if self.coefficient is None else self.coefficient.state_dict(),
             )
     
     def restore(self, model_args, training_args):
@@ -184,7 +179,8 @@ class GaussianModel:
             self.t_gradient_accum = t_gradient_accum
             self.denom = denom
             self.optimizer.load_state_dict(opt_dict)
-            self.coefficient.load_state_dict(coefficient_dict)
+            if coefficient_dict is not None and self.coefficient is not None:
+                self.coefficient.load_state_dict(coefficient_dict)
 
     @property
     def get_scaling(self):
@@ -398,8 +394,8 @@ class GaussianModel:
             l.append({'params': [self._scaling_t], 'lr': training_args.scaling_lr, "name": "scaling_t"})
             if self.rot_4d:
                 l.append({'params': [self._rotation_r], 'lr': training_args.rotation_lr, "name": "rotation_r"})
-
-        l.append({'params': self.coefficient.parameters(), 'lr': training_args.coefficient_lr, "name": "coefficient"})
+        if self.coefficient is not None:
+            l.append({'params': self.coefficient.parameters(), 'lr': training_args.coefficient_lr, "name": "coefficient"})
         
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
@@ -428,9 +424,6 @@ class GaussianModel:
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
             if group["name"] == name:
-                if group['name'] == 'coefficient':
-                    optimizable_tensors[group['name']] = group['params']
-                    continue
                 stored_state = self.optimizer.state.get(group['params'][0], None)
                 stored_state["exp_avg"] = torch.zeros_like(tensor)
                 stored_state["exp_avg_sq"] = torch.zeros_like(tensor)
@@ -532,11 +525,11 @@ class GaussianModel:
 
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_t, new_scaling_t, new_rotation_r):
         d = {"xyz": new_xyz,
-        "f_dc": new_features_dc,
-        "f_rest": new_features_rest,
-        "opacity": new_opacities,
-        "scaling" : new_scaling,
-        "rotation" : new_rotation,
+            "f_dc": new_features_dc,
+            "f_rest": new_features_rest,
+            "opacity": new_opacities,
+            "scaling" : new_scaling,
+            "rotation" : new_rotation,
         }
         if self.gaussian_dim == 4:
             d["t"] = new_t
