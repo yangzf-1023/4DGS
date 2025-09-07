@@ -421,6 +421,7 @@ if __name__ == "__main__":
     parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene")
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
+    parser.add_argument("--pretrain", action="store_true", default=False)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
