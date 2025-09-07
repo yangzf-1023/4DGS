@@ -53,7 +53,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             nn.Sigmoid(),
         ).cuda()
         if args.pretrain:
-            pretrain_coefficient(coefficient)
+            pretrain_coefficient(coefficient, args.opacity_decay_factor)
     else:
         coefficient = None
         
