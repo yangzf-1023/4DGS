@@ -16,10 +16,9 @@ from .diff_gaussian_rasterization import GaussianRasterizationSettings, Gaussian
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, opacity_decay_factor=1.0):
     """
     Render the scene. 
-    
     Background tensor (bg_color) must be on GPU!
     """
  
@@ -52,7 +51,9 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         gaussian_dim=pc.gaussian_dim,
         force_sh_3d=pc.force_sh_3d,
         prefiltered=False,
-        debug=pipe.debug
+        debug=pipe.debug,
+        coefficient=pc.coefficient,
+        opacity_decay_factor=opacity_decay_factor,
     )
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
