@@ -43,7 +43,7 @@ def check_optimizer_gradients(optimizer, prefix=""):
         optimizer: PyTorch 优化器（例如 torch.optim.Adam）
         prefix: 可选的字符串前缀，用于日志区分
     """
-    print(f"{prefix}Checking optimizer gradients:")
+    # print(f"{prefix}Checking optimizer gradients:")
     for group_idx, param_group in enumerate(optimizer.param_groups):
         if param_group['name'] == 'coefficient' or param_group['name'] == 'opacity':
             for _, param in enumerate(param_group['params']):
