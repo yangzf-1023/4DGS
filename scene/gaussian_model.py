@@ -479,7 +479,6 @@ class GaussianModel:
 
     def opacity_decay(self, factor=0.99, mode=None, p=2, offset=0.005):
         old_opacity = self.get_opacity
-        # print(old_opacity.shape)
         if mode is None:
             opacity = old_opacity * factor
         elif mode == 'poly': # [factor - offset, 1 - offset]
@@ -493,7 +492,7 @@ class GaussianModel:
             # sigmoid_output = self.coefficient(old_opacity.unsqueeze(-1)).squeeze(-1)  # [num_points]
             # coefficient = factor + (1 - factor) * sigmoid_output
             # opacity = old_opacity * coefficient
-            return # 不在此实现，修改到光栅化代码中
+            return # 不在此实现，调整到渲染过程中
         else:
             assert False, "Unknown mode for opacity decay: {}".format(mode)
         self._opacity.data = self.inverse_opacity_activation(opacity)
