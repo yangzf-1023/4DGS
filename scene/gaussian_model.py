@@ -490,9 +490,10 @@ class GaussianModel:
             d = factor - offset - c
             opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
         elif mode == 'mlp': # [factor, 1]
-            sigmoid_output = self.coefficient(old_opacity.unsqueeze(-1)).squeeze(-1)  # [num_points]
-            coefficient = factor + (1 - factor) * sigmoid_output
-            opacity = old_opacity * coefficient
+            # sigmoid_output = self.coefficient(old_opacity.unsqueeze(-1)).squeeze(-1)  # [num_points]
+            # coefficient = factor + (1 - factor) * sigmoid_output
+            # opacity = old_opacity * coefficient
+            return # 不在此实现，修改到光栅化代码中
         else:
             assert False, "Unknown mode for opacity decay: {}".format(mode)
         self._opacity.data = self.inverse_opacity_activation(opacity)
