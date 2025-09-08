@@ -45,11 +45,11 @@ def check_optimizer_gradients(optimizer, prefix=""):
     """
     print(f"{prefix}Checking optimizer gradients:")
     for group_idx, param_group in enumerate(optimizer.param_groups):
-        if param_group['name'] == 'coefficient':
+        if param_group['name'] == 'coefficient' or param_group['name'] == 'opacity':
             for _, param in enumerate(param_group['params']):
                 param_shape = list(param.shape)
                 requires_grad = param.requires_grad
-                grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.6f}"
+                grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.15f}"
                 print(f"    Param {param_group['name']}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
@@ -137,7 +137,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gt_image = gt_image.cuda()
                 viewpoint_cam = viewpoint_cam.cuda()
 
-                render_pkg = render(viewpoint_cam, gaussians, pipe, background)
+                render_pkg = render(viewpoint_cam, gaussians, pipe, background, opacity_decay_factor=args.opacity_decay_factor)
                 image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
                 depth = render_pkg["depth"]
                 alpha = render_pkg["alpha"]
