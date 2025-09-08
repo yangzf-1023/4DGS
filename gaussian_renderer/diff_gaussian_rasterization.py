@@ -235,11 +235,9 @@ class GaussianRasterizationSettings(NamedTuple):
     force_sh_3d: bool
     prefiltered : bool
     debug : bool
-    coefficient : nn.Module
-    opacity_decay_factor : float
 
 class GaussianRasterizer(nn.Module):
-    def __init__(self, raster_settings):
+    def __init__(self, raster_settings): 
         super().__init__()
         self.raster_settings = raster_settings
 
@@ -260,11 +258,6 @@ class GaussianRasterizer(nn.Module):
                 cov3D_precomp = None):
     
         raster_settings = self.raster_settings
-        
-        factor = raster_settings.opacity_decay_factor
-        assert factor > 0 and factor <= 1, "Opacity decay factor should be between 0 and 1"
-        coefficient = raster_settings.coefficient
-        decayed_opacities = opacities if coefficient is None else (factor + (1 - factor) * coefficient(opacities)) * opacities
 
         if (shs is None and colors_precomp is None) or (shs is not None and colors_precomp is not None):
             raise Exception('Please provide excatly one of either SHs or precomputed colors!')
@@ -304,7 +297,7 @@ class GaussianRasterizer(nn.Module):
             shs,
             colors_precomp,
             flow_2d,
-            decayed_opacities,
+            opacities,
             ts,
             scales,
             scales_t,
