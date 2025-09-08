@@ -60,7 +60,6 @@ class GaussianModel:
 
         self.rotation_activation = torch.nn.functional.normalize
 
-
     def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0, coefficient=None):
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree  
@@ -269,8 +268,7 @@ class GaussianModel:
         for i in range(self._rotation.shape[1]):
             l.append('rot_{}'.format(i))
         return l
-
-    
+ 
     def save_ply(self, path):
         mkdir_p(os.path.dirname(path))
         xyz = self.get_xyz.detach().cpu().numpy()
