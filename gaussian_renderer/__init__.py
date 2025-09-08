@@ -52,8 +52,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         force_sh_3d=pc.force_sh_3d,
         prefiltered=False,
         debug=pipe.debug,
-        coefficient=pc.coefficient,
-        opacity_decay_factor=opacity_decay_factor,
     )
 
     rasterizer = GaussianRasterizer(raster_settings=raster_settings)
@@ -61,6 +59,12 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     means3D = pc.get_xyz
     means2D = screenspace_points
     opacity = pc.get_opacity
+    
+    # opacity decay
+    if pc.coefficient is not None:
+        factor = opacity_decay_factor
+        opacity = opacity * (factor + (1 - factor) * pc.coefficient(opacity))
+        pc._opacity.data = pc.inverse_opacity_activation(opacity)
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
