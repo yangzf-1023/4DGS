@@ -138,8 +138,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gt_image, viewpoint_cam = batch_data[batch_idx]
                 gt_image = gt_image.cuda()
                 viewpoint_cam = viewpoint_cam.cuda()
+                
+                # Opacity decay
+                if args.opacity_decay and iteration > opt.densify_from_iter:
+                    opt.densify_until_iter = opt.iterations
+                    gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
-                render_pkg = render(viewpoint_cam, gaussians, pipe, background, opacity_decay_factor=args.opacity_decay_factor)
+                render_pkg = render(viewpoint_cam, gaussians, pipe, background, opacity_decay_factor=args.opacity_decay_factor, decay=args.opacity_decay and iteration > opt.densify_from_iter)
                 image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
                 depth = render_pkg["depth"]
                 alpha = render_pkg["alpha"]
@@ -251,11 +256,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 # Log 
                 test_psnr = training_report(tb_writer, iteration, Ll1, Lssim, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), loss_dict)
-                
-                # Opacity decay
-                if args.opacity_decay and iteration > opt.densify_from_iter:
-                    opt.densify_until_iter = opt.iterations
-                    gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
                 # Densification
                 if iteration < opt.densify_until_iter and (opt.densify_until_num_points < 0 or gaussians.get_xyz.shape[0] < opt.densify_until_num_points):
