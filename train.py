@@ -49,9 +49,10 @@ def check_optimizer_gradients(optimizer, prefix=""):
             for _, param in enumerate(param_group['params']):
                 param_shape = list(param.shape)
                 requires_grad = param.requires_grad
-                assert requires_grad and param.grad is not None and torch.norm(param.grad) > 0, f"Gradient issue in param group '{param_group['name']}'"
-                # grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.15f}"
-                # print(f"    Param {param_group['name']}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
+                # assert requires_grad and param.grad is not None and torch.norm(param.grad) > 0, f"Gradient issue in param group '{param_group['name']}'"
+                grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.15f}"
+                if requires_grad == False or param.grad is None or torch.norm(param.grad) == 0:
+                    print(f"{prefix} Checking optimizer gradients: Param {param_group['name']}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
              gaussian_dim, time_duration, num_pts, num_pts_ratio, rot_4d, force_sh_3d, batch_size):

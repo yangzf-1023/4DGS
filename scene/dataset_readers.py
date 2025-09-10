@@ -215,7 +215,7 @@ def process_camera_info(cam_infos_unsorted, path, reading_dir):
     
     return new_cam_infos
 
-def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0, training_cam=['cam00', 'cam01', 'cam20', 'cam13']):
+def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0, training_cam=['cam00', 'cam01', 'cam20', 'cam13'], num_pts=100_000, time_duration=None):
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -261,6 +261,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0, train
         pcd = fetchPly(ply_path)
     except:
         pcd = None
+        
     if num_pts_ratio > 1.001:
         num_pts = int((num_pts_ratio - 1) * pcd.points.shape[0])
         mean_xyz = pcd.points.mean(axis=0)
@@ -276,6 +277,24 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, num_pts_ratio=1.0, train
                               np.zeros((num_pts, 3))], 
                               axis=0)
         pcd = BasicPointCloud(points=xyz, colors=colors, normals=normals)
+    
+    if pcd.points.shape[0] > num_pts:
+        mask = np.random.randint(0, pcd.points.shape[0], num_pts)
+        # mask = fps(torch.from_numpy(pcd.points).cuda()[None], num_pts).cpu().numpy()
+        if pcd.time is not None:
+            times = pcd.time[mask]
+        else:
+            times = None
+        xyz = pcd.points[mask]
+        rgb = pcd.colors[mask]
+        normals = pcd.normals[mask]
+        if times is not None:
+            time_mask = (times[:,0] < time_duration[1]) & (times[:,0] > time_duration[0])
+            xyz = xyz[time_mask]
+            rgb = rgb[time_mask]
+            normals = normals[time_mask]
+            times = times[time_mask]
+        pcd = BasicPointCloud(points=xyz, colors=rgb, normals=normals, time=times)
 
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
