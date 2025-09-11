@@ -489,13 +489,12 @@ class GaussianModel:
             d = factor - offset - c
             opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
         elif mode == 'mlp': # [factor, 1]
-            # sigmoid_output = self.coefficient(old_opacity.unsqueeze(-1)).squeeze(-1)  # [num_points]
-            # coefficient = factor + (1 - factor) * sigmoid_output
-            # opacity = old_opacity * coefficient
-            return # 不在此实现，调整到渲染过程中
+            assert self.coefficient is not None
+            opacity = (self.coefficient(old_opacity) * (1 - factor) + factor) * old_opacity
         else:
             assert False, "Unknown mode for opacity decay: {}".format(mode)
-        self._opacity.data = self.inverse_opacity_activation(opacity)
+        # self._opacity.data = self.inverse_opacity_activation(opacity)
+        return opacity
     
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}

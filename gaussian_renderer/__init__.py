@@ -65,7 +65,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     #     factor = opacity_decay_factor
     #     opacity = opacity * (factor + (1 - factor) * pc.coefficient(opacity))
     #     pc._opacity.data = pc.inverse_opacity_activation(opacity) # 是否注释掉这一行跑一个实验
-    if args.opacity_decay and opacity_decay:
+    if opacity_decay:
         opacity = pc.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
     else:
         opacity = pc.get_opacity
