@@ -17,7 +17,7 @@ from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
-           scaling_modifier = 1.0, override_color = None, args=None, curr_iter=1, until_iter=0, from_iter=0):
+           scaling_modifier = 1.0, override_color=None, args=None, curr_iter=0, until_iter=0, from_iter=0):
     """
     Render the scene. 
     Background tensor (bg_color) must be on GPU!
@@ -61,13 +61,14 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor,
     means2D = screenspace_points
     opacity = pc.get_opacity
     
-    if args.opacity_decay and curr_iter > from_iter:
+    if curr_iter > from_iter and args.opacity_decay:
         factor = args.opacity_decay_factor 
         if args.factor_decay:
             k = 1
             a = (1 - factor) / (math.exp(k) - 1)
             b = factor - a
-            factor = a * math.exp(k * curr_iter) + b
+            factor = a * math.exp(k * curr_iter / until_iter) + b
+            factor = min(1, factor)
         opacity = pc.opacity_decay(factor=factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
