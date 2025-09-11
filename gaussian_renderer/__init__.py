@@ -64,7 +64,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor,
     if args.opacity_decay and curr_iter > from_iter:
         factor = args.opacity_decay_factor 
         if args.factor_decay:
-            factor += (1 - factor) * max(curr_iter / until_iter, 1) # 最简单线性版本
+            k = 1
+            a = (1 - factor) / (math.exp(k) - 1)
+            b = factor - a
+            factor = a * math.exp(k * curr_iter) + b
         opacity = pc.opacity_decay(factor=factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
