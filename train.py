@@ -10,7 +10,7 @@
 #
 
 import os
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["TORCH_USE_CUDA_DSA"] = "1"
 import random
 import torch
@@ -140,11 +140,11 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 viewpoint_cam = viewpoint_cam.cuda()
                 
                 # Opacity decay
-                if args.opacity_decay and iteration > opt.densify_from_iter:
-                    opt.densify_until_iter = opt.iterations
-                    gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
+                # if args.opacity_decay and iteration > opt.densify_from_iter:
+                    # gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
-                render_pkg = render(viewpoint_cam, gaussians, pipe, background, opacity_decay_factor=args.opacity_decay_factor, decay=args.opacity_decay and iteration > opt.densify_from_iter)
+                render_pkg = render(viewpoint_cam, gaussians, pipe, 
+                                    background, args=args, opacity_decay=args.opacity_decay and iteration > opt.densify_from_iter)
                 image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
                 depth = render_pkg["depth"]
                 alpha = render_pkg["alpha"]
