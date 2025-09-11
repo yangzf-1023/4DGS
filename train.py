@@ -65,9 +65,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     
     if args.opacity_decay and args.decay_mode == "mlp":
         coefficient = nn.Sequential(
-            nn.Linear(1, 16),
+            nn.Linear(1, 64),
             nn.ReLU(),
-            nn.Linear(16, 1),
+            nn.Linear(64, 1),
             nn.Sigmoid(),
         ).cuda()
         if args.pretrain:
@@ -143,8 +143,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 # if args.opacity_decay and iteration > opt.densify_from_iter:
                     # gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
-                render_pkg = render(viewpoint_cam, gaussians, pipe, 
-                                    background, args=args, opacity_decay=args.opacity_decay and iteration > opt.densify_from_iter)
+                render_pkg = render(viewpoint_cam, gaussians, pipe, background, 
+                                    args=args, curr_iter=iteration, from_iter=opt.densify_from_iter, until_iter=opt.densify_until_iter)
                 image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
                 depth = render_pkg["depth"]
                 alpha = render_pkg["alpha"]
@@ -435,6 +435,7 @@ if __name__ == "__main__":
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
     parser.add_argument("--pretrain", action="store_true", default=False)
+    parser.add_argument('--factor_decay', action="store_true", default=False)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)

@@ -16,7 +16,8 @@ from .diff_gaussian_rasterization import GaussianRasterizationSettings, Gaussian
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, args=None, opacity_decay=False):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
+           scaling_modifier = 1.0, override_color = None, args=None, curr_iter=1, until_iter=0, from_iter=0):
     """
     Render the scene. 
     Background tensor (bg_color) must be on GPU!
@@ -60,15 +61,11 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     means2D = screenspace_points
     opacity = pc.get_opacity
     
-    # opacity decay
-    # if pc.coefficient is not None and decay:
-    #     factor = opacity_decay_factor
-    #     opacity = opacity * (factor + (1 - factor) * pc.coefficient(opacity))
-    #     pc._opacity.data = pc.inverse_opacity_activation(opacity) # 是否注释掉这一行跑一个实验
-    if opacity_decay:
-        opacity = pc.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
-    else:
-        opacity = pc.get_opacity
+    if args.opacity_decay and curr_iter > from_iter:
+        factor = args.opacity_decay_factor 
+        if args.factor_decay:
+            factor += (1 - factor) * max(curr_iter / until_iter, 1) # 最简单线性版本
+        opacity = pc.opacity_decay(factor=factor, mode=args.decay_mode, p=args.p, offset=args.offset)
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
