@@ -431,11 +431,11 @@ if __name__ == "__main__":
     parser.add_argument("--opacity_decay", action="store_true", default=False)
     parser.add_argument("--opacity_decay_factor", type=float, default=0.99)
     parser.add_argument("--decay_mode", type=str, default=None, help="Decay mode for opacity decay")
-    parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene")
+    parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene") # 放弃
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
     parser.add_argument("--pretrain", action="store_true", default=False)
-    parser.add_argument('--factor_decay', action="store_true", default=False)
+    parser.add_argument('--factor_decay', action="store_true", default=False) 
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
@@ -465,6 +465,9 @@ if __name__ == "__main__":
         args.training_view = [f"cam{str(int(cam)).zfill(2)}" for cam in sorted(args.training_view.split(','))]
     else:
         args.training_view = [f"cam{str(int(cam)).zfill(2)}" for cam in range(0, args.n_views, 1)]
+        
+    if args.opacity_decay:
+        args.densify_until_iter = args.iterations
     
     params_file = os.path.join(args.model_path, "training_params.txt")
     
