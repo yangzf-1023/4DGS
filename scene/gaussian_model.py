@@ -502,7 +502,6 @@ class GaussianModel:
             assert False, "Unknown mode for opacity decay: {}".format(mode)
         # self._opacity.data = self.inverse_opacity_activation(opacity)
         
-    
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
