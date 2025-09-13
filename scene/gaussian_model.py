@@ -479,28 +479,24 @@ class GaussianModel:
 
     def opacity_decay(self, factor=0.99, mode=None, p=2, offset=0.005):
         old_opacity = self.get_opacity
-        if mode is None:
+        if mode == 'linear':
             opacity = old_opacity * factor
             self._opacity.data = self.inverse_opacity_activation(opacity)
-            return self.get_opacity
         elif mode == 'poly': # [factor - offset, 1 - offset]
             opacity = old_opacity * (factor ** ((1 - old_opacity) ** p) - offset) 
             self._opacity.data = self.inverse_opacity_activation(opacity)
-            return self.get_opacity
         elif mode == 'exp': # [a = factor - offset, b = factor]
             assert p != 0
             c = offset / (math.exp(p) - 1)
             d = factor - offset - c
             opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
             self._opacity.data = self.inverse_opacity_activation(opacity)
-            return self.get_opacity
         elif mode == 'mlp': # [factor, 1]
             assert self.coefficient is not None
             opacity = (self.coefficient(old_opacity) * (1 - factor) + factor) * old_opacity
-            return opacity
         else:
-            assert False, "Unknown mode for opacity decay: {}".format(mode)
-        # self._opacity.data = self.inverse_opacity_activation(opacity)
+            raise NotImplementedError("Opacity decay mode not implemented")
+        return opacity
         
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
