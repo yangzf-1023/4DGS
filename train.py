@@ -429,16 +429,17 @@ if __name__ == "__main__":
     
     # opacity decay
     parser.add_argument("--opacity_decay", action="store_true", default=False)
-    parser.add_argument("--opacity_decay_mode", type=str, default=None, help="Decay mode for opacity decay")
-    parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene") # 放弃
+    parser.add_argument("--opacity_decay_mode", type=str, default='linear', help="Decay mode for opacity decay")
+    parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene") # 停用
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
     parser.add_argument("--pretrain", action="store_true", default=False)
     
     parser.add_argument("--opacity_decay_factor", type=float, default=0.996)
-    parser.add_argument('--k', default=0.5, type=float, help='k')
+    parser.add_argument('--k', default=1, type=float, help='k')
     parser.add_argument('--factor_decay', action="store_true", default=False) 
-    parser.add_argument("--factor_decay_mode", type=str, default=None, help="Decay mode for factor decay")
+    parser.add_argument("--factor_decay_mode", type=str, default='exp', help="Decay mode for factor decay")
+    parser.add_argument('--warm_up', action="store_true", default=False) # 是否有衰减系数的短暂变化
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
