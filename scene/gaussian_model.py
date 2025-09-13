@@ -493,7 +493,8 @@ class GaussianModel:
             self._opacity.data = self.inverse_opacity_activation(opacity)
         elif mode == 'mlp': # [factor, 1]
             assert self.coefficient is not None
-            opacity = (self.coefficient(old_opacity) * (1 - factor) + factor) * old_opacity
+            opacity = (self.coefficient(old_opacity.detach()) * (1 - factor) + factor) * old_opacity
+            self._opacity.data = self.inverse_opacity_activation(opacity)
         else:
             raise NotImplementedError("Opacity decay mode not implemented")
         return opacity
