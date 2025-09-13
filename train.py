@@ -63,7 +63,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     
-    if args.opacity_decay and args.decay_mode == "mlp":
+    if args.opacity_decay and args.opacity_decay_mode == "mlp":
         coefficient = nn.Sequential(
             nn.Linear(1, 64),
             nn.ReLU(),
@@ -141,7 +141,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 
                 # Opacity decay
                 # if args.opacity_decay and iteration > opt.densify_from_iter:
-                    # gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.decay_mode, p=args.p, offset=args.offset)
+                    # gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
 
                 render_pkg = render(viewpoint_cam, gaussians, pipe, background, 
                                     args=args, curr_iter=iteration, from_iter=opt.densify_from_iter, until_iter=opt.densify_until_iter)
@@ -429,13 +429,16 @@ if __name__ == "__main__":
     
     # opacity decay
     parser.add_argument("--opacity_decay", action="store_true", default=False)
-    parser.add_argument("--opacity_decay_factor", type=float, default=0.99)
-    parser.add_argument("--decay_mode", type=str, default=None, help="Decay mode for opacity decay")
+    parser.add_argument("--opacity_decay_mode", type=str, default=None, help="Decay mode for opacity decay")
     parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene") # 放弃
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
     parser.add_argument("--pretrain", action="store_true", default=False)
+    
+    parser.add_argument("--opacity_decay_factor", type=float, default=0.996)
+    parser.add_argument('--k', default=0.5, type=float, help='k')
     parser.add_argument('--factor_decay', action="store_true", default=False) 
+    parser.add_argument("--factor_decay_mode", type=str, default=None, help="Decay mode for factor decay")
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
