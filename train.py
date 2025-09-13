@@ -440,6 +440,7 @@ if __name__ == "__main__":
     parser.add_argument('--factor_decay', action="store_true", default=False) 
     parser.add_argument("--factor_decay_mode", type=str, default='exp', help="Decay mode for factor decay")
     parser.add_argument('--warm_up', action="store_true", default=False) # 是否有衰减系数的短暂变化
+    parser.add_argument('--gradient', action="store_true", default=False) # 判断 opacity decay 中是否有梯度
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
