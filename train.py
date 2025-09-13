@@ -36,7 +36,7 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
     
-def check_optimizer_gradients(optimizer, prefix=""):
+def check_optimizer_gradients(optimizer, iter, prefix=""):
     """
     检查优化器中所有参数的梯度状态。
     Args:
@@ -44,6 +44,7 @@ def check_optimizer_gradients(optimizer, prefix=""):
         prefix: 可选的字符串前缀，用于日志区分
     """
     # print(f"{prefix}Checking optimizer gradients:")
+    # if iter > args.densify_from_iter:
     for group_idx, param_group in enumerate(optimizer.param_groups):
         if param_group['name'] == 'coefficient' or param_group['name'] == 'opacity':
             for _, param in enumerate(param_group['params']):
@@ -199,7 +200,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                 loss = loss / batch_size
                 loss.backward()
-                check_optimizer_gradients(gaussians.optimizer, prefix=f"Iter {iteration} - ")
+                check_optimizer_gradients(gaussians.optimizer, iter=iteration, prefix=f"Iter {iteration} - ")
                 
                 batch_point_grad.append(torch.norm(viewspace_point_tensor.grad[:,:2], dim=-1))
                 batch_radii.append(radii)
