@@ -63,18 +63,24 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor,
     
     if curr_iter > from_iter and args.opacity_decay:
         factor = args.opacity_decay_factor 
-        if args.factor_decay:
+        interval = from_iter
+        if args.warm_up:
+            interval += from_iter
+        if curr_iter < interval:
+            factor = 1 - (1 - factor) * (math.sin(math.pi * (curr_iter-from_iter) / (interval-from_iter)) ** 2)
+        else:
             if args.factor_decay_mode == 'exp':
                 k = args.k
                 a = (1 - factor) / (math.exp(k) - 1)
                 b = factor - a
-                factor = a * math.exp(k * curr_iter / until_iter) + b
-                factor = min(1, factor)
-            elif args.factor_decay_mode == 'sin':
-                factor = 1 - (1 - factor) * (math.sin(math.pi * curr_iter / until_iter) ** 2)
+                factor = a * math.exp(k * (curr_iter - interval) / (until_iter - interval)) + b
+                factor = min(1.0, factor)
             else:
                 raise NotImplementedError
-        opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
+        if args.gradient or args.opacity_decay_mode == 'mlp':
+            opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
+        else:
+            opacity = pc.get_opacity
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
     # scaling / rotation by the rasterizer.
