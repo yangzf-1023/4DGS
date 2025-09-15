@@ -78,8 +78,7 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor,
         # if args.gradient or args.opacity_decay_mode == 'mlp':
         opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
         
-    if ((not args.gradient) and args.opacity_decay_mode != 'mlp'
-        ) or not (curr_iter > from_iter and args.opacity_decay):
+    if (not (curr_iter > from_iter and args.opacity_decay)) or ((not args.gradient) and args.opacity_decay_mode != 'mlp'):
         opacity = pc.get_opacity
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
