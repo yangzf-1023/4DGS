@@ -8,7 +8,7 @@ def f(x, factor, k=1):
 # 设置参数
 factor = 0.996  # 最小值，可调整
 x = np.linspace(0, 1, 1000)  # 定义域 [0,1]
-k = 1
+k = 0.5
 y = f(x, factor, k)
 
 # 绘制图像
