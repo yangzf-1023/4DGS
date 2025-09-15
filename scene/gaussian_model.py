@@ -485,14 +485,17 @@ class GaussianModel:
         elif mode == 'poly': # [factor - offset, 1 - offset]
             opacity = old_opacity * (factor ** ((1 - old_opacity) ** p) - offset) 
             self._opacity.data = self.inverse_opacity_activation(opacity)
-        elif mode == 'exp': # [a = factor - offset, b = factor]
-            assert p != 0
-            c = offset / (math.exp(p) - 1)
-            d = factor - offset - c
-            opacity = old_opacity * (c * torch.exp(p * old_opacity) + d)
+        elif mode == 'exp': # [a = factor - offset, b = 1 - offset]
+            a = factor - offset
+            b = 1 - offset
+            if p != 0:
+                opacity = (a + (b - a) * (1 - torch.exp(p * old_opacity)) / (1 - math.exp(p)))
+            else:
+                opacity =  (a + (b - a) * old_opacity)
             self._opacity.data = self.inverse_opacity_activation(opacity)
         elif mode == 'mlp': # [factor, 1]
-            assert self.coefficient is not None
+            if self.coefficient is None:
+                raise ValueError("Coefficient is not defined")
             opacity = (self.coefficient(old_opacity.detach()) * (1 - factor) + factor) * old_opacity
             self._opacity.data = self.inverse_opacity_activation(opacity)
         else:
