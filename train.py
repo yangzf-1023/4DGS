@@ -46,7 +46,7 @@ def check_optimizer_gradients(optimizer, iter, prefix=""):
     # print(f"{prefix}Checking optimizer gradients:")
     # if iter > args.densify_from_iter:
     for group_idx, param_group in enumerate(optimizer.param_groups):
-        if param_group['name'] == 'coefficient' or param_group['name'] == 'opacity':
+        if (param_group['name'] == 'coefficient' and iter > args.densify_from_iter) or param_group['name'] == 'opacity':
             for _, param in enumerate(param_group['params']):
                 param_shape = list(param.shape)
                 requires_grad = param.requires_grad
@@ -54,6 +54,7 @@ def check_optimizer_gradients(optimizer, iter, prefix=""):
                 grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.15f}"
                 if requires_grad == False or param.grad is None or torch.norm(param.grad) == 0:
                     print(f"{prefix} Checking optimizer gradients: Param {param_group['name']}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
+                    raise ValueError(f"Gradient issue in param group '{param_group['name']}'")
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
              gaussian_dim, time_duration, num_pts, num_pts_ratio, rot_4d, force_sh_3d, batch_size):
@@ -140,10 +141,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 gt_image = gt_image.cuda()
                 viewpoint_cam = viewpoint_cam.cuda()
                 
-                # Opacity decay
-                # if args.opacity_decay and iteration > opt.densify_from_iter:
-                    # gaussians.opacity_decay(factor=args.opacity_decay_factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
-
                 render_pkg = render(viewpoint_cam, gaussians, pipe, background, 
                                     args=args, curr_iter=iteration, from_iter=opt.densify_from_iter, until_iter=opt.densify_until_iter)
                 image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
@@ -441,6 +438,7 @@ if __name__ == "__main__":
     parser.add_argument('--factor_decay', action="store_true", default=False) 
     parser.add_argument("--factor_decay_mode", type=str, default='exp', help="Decay mode for factor decay")
     parser.add_argument('--warm_up', action="store_true", default=False) # 是否有衰减系数的短暂变化
+    parser.add_argument('--warm_up_until', default=1000, type=int, help='warm up until iter')
     parser.add_argument('--gradient', action="store_true", default=False) # opacity decay 中是否有梯度
     
     args = parser.parse_args(sys.argv[1:])
@@ -464,7 +462,7 @@ if __name__ == "__main__":
         args.model_path = os.path.join(args.model_path, args.output_dir)
     
     if os.path.exists(args.model_path):
-        assert False, f"Output folder {args.model_path} already exists"
+        raise AssertionError(f"Output folder {args.model_path} already exists")
     os.makedirs(args.model_path, exist_ok=True)
         
     if args.training_view: # 指定的是训练视角
