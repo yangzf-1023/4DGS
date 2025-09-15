@@ -62,24 +62,21 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor,
     opacity = pc.get_opacity
     
     if curr_iter > from_iter and args.opacity_decay:
-        factor = args.opacity_decay_factor 
-        interval = from_iter
-        if args.warm_up:
-            interval += from_iter
+        interval = args.warm_up_until if args.warm_up else from_iter
         if curr_iter < interval:
-            factor = 1 - (1 - factor) * (math.sin(math.pi * (curr_iter-from_iter) / (interval-from_iter)) ** 2)
+            factor = 1 - (1 - args.opacity_decay_factor) * (math.sin(0.5 * math.pi * (curr_iter-from_iter) / (interval-from_iter)) ** 2)
         else:
             if args.factor_decay_mode == 'exp':
                 k = args.k
-                a = (1 - factor) / (math.exp(k) - 1)
-                b = factor - a
+                a = (1 - args.opacity_decay_factor) / (math.exp(k) - 1)
+                b = args.opacity_decay_factor - a
                 factor = a * math.exp(k * (curr_iter - interval) / (until_iter - interval)) + b
                 factor = min(1.0, factor)
             else:
                 raise NotImplementedError
-        if args.gradient or args.opacity_decay_mode == 'mlp':
-            opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
-        else:
+        # if args.gradient or args.opacity_decay_mode == 'mlp':
+        opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
+        if (not args.gradient) and  args.opacity_decay_mode != 'mlp':
             opacity = pc.get_opacity
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
