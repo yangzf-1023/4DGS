@@ -63,22 +63,26 @@ def render(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tensor,
     
     # opacity decay
     if curr_iter > from_iter and args.opacity_decay:
-        interval = args.warm_up_until if args.warm_up else from_iter
-        if curr_iter < interval:
-            factor = 1 - (1 - args.opacity_decay_factor) * (math.sin(0.5 * math.pi * (curr_iter-from_iter) / (interval-from_iter)) ** 2)
-        else:
-            if args.factor_decay_mode == 'exp':
-                k = args.k
-                a = (1 - args.opacity_decay_factor) / (math.exp(k) - 1)
-                b = args.opacity_decay_factor - a
-                factor = a * math.exp(k * (curr_iter - interval) / (until_iter - interval)) + b
-                factor = min(1.0, factor)
-            else:
-                raise NotImplementedError
-        # if args.gradient or args.opacity_decay_mode == 'mlp':
-        opacity = pc.opacity_decay(factor=factor, mode=args.opacity_decay_mode, p=args.p, offset=args.offset)
+        # interval = args.warm_up_until if args.warm_up else from_iter
+        # if curr_iter < interval:
+        #     factor = args.f_min - (args.f_max - args.f_min) * (math.sin(0.5 * math.pi * (curr_iter-from_iter) / (interval-from_iter)) ** 2)
+        # else:
+        #     if args.factor_decay:
+        #         if args.factor_decay_mode == 'exp':
+        #             k = args.k
+        #             a = (1 - args.opacity_decay_factor) / (math.exp(k) - 1)
+        #             b = args.opacity_decay_factor - a
+        #             factor = a * math.exp(k * (curr_iter - interval) / (until_iter - interval)) + b
+        #             factor = min(1.0, factor)
+        #         else:
+        #             raise NotImplementedError
+        #     else:
+        #         pass
         
-    if (not (curr_iter > from_iter and args.opacity_decay)) or ((not args.gradient) and args.opacity_decay_mode != 'mlp'):
+        opacity = pc.opacity_decay(f_min=args.f_min, mode=args.opacity_decay_mode, p=args.p, f_max=args.f_max)
+        if (not args.gradient) and args.opacity_decay_mode != 'mlp':
+            opacity = pc.get_opacity
+    else:
         opacity = pc.get_opacity
 
     # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
