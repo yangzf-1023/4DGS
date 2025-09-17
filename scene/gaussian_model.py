@@ -477,26 +477,38 @@ class GaussianModel:
                 self._rotation_r = optimizable_tensors['rotation_r']
             self.t_gradient_accum = self.t_gradient_accum[valid_points_mask]
 
-    def opacity_decay(self, factor=0.99, mode=None, p=2, offset=0.005):
+    def opacity_decay(self, f_min=0.99, mode=None, p=2, f_max=1.0):
         old_opacity = self.get_opacity
-        if mode == 'linear':
-            opacity = old_opacity * factor
+        if mode == 'const':
+            opacity = old_opacity * f_min
             self._opacity.data = self.inverse_opacity_activation(opacity)
-        elif mode == 'poly': # [factor - offset, 1 - offset]
-            opacity = old_opacity * (factor ** ((1 - old_opacity) ** p) - offset) 
+        # elif mode == 'poly': # [factor - offset, 1 - offset]
+        #     opacity = old_opacity * (factor ** ((1 - old_opacity) ** p) - offset) 
+        #     self._opacity.data = self.inverse_opacity_activation(opacity)
+        elif mode == 'exp_asc': # 单调递增，p > 0 时下凸，反之上凸
+            if p != 0: # 直线
+                opacity = old_opacity * (f_min + (f_max - f_min) * (1 - torch.exp(p * old_opacity)) / (1 - math.exp(p))) 
+            else: # p > 0 时下凸，反之上凸
+                opacity = old_opacity * (f_min + (f_max - f_min) * old_opacity)
             self._opacity.data = self.inverse_opacity_activation(opacity)
-        elif mode == 'exp': # [a = factor - offset, b = 1 - offset]
-            a = factor - offset
-            b = 1 - offset
+        elif mode == 'exp_desc': # 单调递减，p > 0 时下凸，反之上凸
+            assert p >= 0, "p should be greater than or equal to 0"
             if p != 0:
-                opacity = (a + (b - a) * (1 - torch.exp(p * old_opacity)) / (1 - math.exp(p)))
+                opacity = old_opacity * (f_min + (f_max - f_min) * ((torch.exp(-p * old_opacity) - math.exp(-p)) / (1 - math.exp(-p)))) 
             else:
-                opacity =  (a + (b - a) * old_opacity)
-            self._opacity.data = self.inverse_opacity_activation(opacity)
-        elif mode == 'mlp': # [factor, 1]
+                opacity = old_opacity * (f_min + (f_max - f_min) * (1 - old_opacity))
+        elif mode == 'mlp': # [f_min, f_max]
             if self.coefficient is None:
                 raise ValueError("Coefficient is not defined")
-            opacity = (self.coefficient(old_opacity.detach()) * (1 - factor) + factor) * old_opacity
+            opacity = old_opacity * (f_min + (f_max - f_min) * self.coefficient(old_opacity.detach()))
+            self._opacity.data = self.inverse_opacity_activation(opacity)
+        elif mode == 'power_desc': # 单调递减，p > 1 时下凸，0 < p < 1 时上凸
+            assert p > 0, "p should be greater than 0"
+            opacity = old_opacity * (f_min + (f_max - f_min) * ((1 - old_opacity) ** p))
+            self._opacity.data = self.inverse_opacity_activation(opacity)
+        elif mode == 'power_asc': # 单调递减，p > 1 时下凸，0 < p < 1 时上凸
+            assert p > 0, "p should be greater than 0"
+            opacity = old_opacity * (f_min + (f_max - f_min) * (old_opacity ** p))
             self._opacity.data = self.inverse_opacity_activation(opacity)
         else:
             raise NotImplementedError("Opacity decay mode not implemented")
