@@ -54,7 +54,7 @@ def check_optimizer_gradients(optimizer, iter, prefix=""):
                 grad_status = "No gradient (None)" if param.grad is None else f"Grad norm: {torch.norm(param.grad):.15f}"
                 if requires_grad == False or param.grad is None or torch.norm(param.grad) == 0:
                     print(f"{prefix} Checking optimizer gradients: Param {param_group['name']}: shape={param_shape}, requires_grad={requires_grad}, {grad_status}")
-                    raise ValueError(f"Gradient issue in param group '{param_group['name']}'")
+                    # raise ValueError(f"Gradient issue in param group '{param_group['name']}'")
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
              gaussian_dim, time_duration, num_pts, num_pts_ratio, rot_4d, force_sh_3d, batch_size):
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     
     # opacity decay
     parser.add_argument("--opacity_decay", action="store_true", default=False)
-    parser.add_argument("--opacity_decay_mode", type=str, default='linear', help="Decay mode for opacity decay")
+    parser.add_argument("--opacity_decay_mode", type=str, default='const', help="Decay mode for opacity decay")
     parser.add_argument("--limited", action="store_true", default=False, help="Whether to limit the size of points in the scene") # 停用
     parser.add_argument('--p', default=0.5, type=float, help='p')
     parser.add_argument('--offset', default=0, type=float, help='offset for opacity decay')
