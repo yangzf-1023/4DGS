@@ -152,9 +152,21 @@ CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml 
 CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml --training_view 1,10,13,20 \
  --output_dir 0917/power0.995-1_p2 --opacity_decay --opacity_decay_mode power --opacity_decay_factor 0.995 --p 2 
 
-# decay0.996
+# decay0.997
 CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml --training_view 1,10,13,20 \
- --output_dir 0917/decay0.996 --opacity_decay --opacity_decay_mode linear --opacity_decay_factor 0.995 --p 2 
+ --output_dir 0917/decay0.997 --opacity_decay --opacity_decay_mode const --f_min 0.997
+
+# decay0.9975
+CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml --training_view 1,10,13,20 \
+ --output_dir 0917/decay0.9975 --opacity_decay --opacity_decay_mode const --f_min 0.9975
+
+# decay0.9975_gradient
+CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml --training_view 1,10,13,20 \
+ --output_dir 0917/decay0.9975_gradient --opacity_decay --opacity_decay_mode const --f_min 0.9975 --gradient
+
+# decay0.998
+CUDA_VISIBLE_DEVICES=1 python train.py --config configs/dynerf/flame_steak.yaml --training_view 1,10,13,20 \
+ --output_dir 0917/decay0.998 --opacity_decay --opacity_decay_mode const --f_min 0.998
 
 
 ```

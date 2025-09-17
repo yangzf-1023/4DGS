@@ -434,11 +434,12 @@ if __name__ == "__main__":
     parser.add_argument("--f_min", type=float, default=0.996, help='min factor')
     parser.add_argument("--pretrain", action="store_true", default=False)
     
-    parser.add_argument('--k', default=1, type=float, help='k')
+    parser.add_argument('--k', default=1, type=float, help='k') # 随时间衰减，暂时停用
     parser.add_argument('--factor_decay', action="store_true", default=False) 
     parser.add_argument("--factor_decay_mode", type=str, default='exp', help="Decay mode for factor decay")
     parser.add_argument('--warm_up', action="store_true", default=False) # 是否有衰减系数的短暂变化
     parser.add_argument('--warm_up_until', default=1000, type=int, help='warm up until iter')
+    
     parser.add_argument('--gradient', action="store_true", default=False) # opacity decay 中是否有梯度
     
     args = parser.parse_args(sys.argv[1:])
