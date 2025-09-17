@@ -16,6 +16,7 @@ from tqdm import tqdm
 from torch.autograd import Variable
 from math import exp
 from torchmetrics import MultiScaleStructuralSimilarityIndexMeasure
+import math
 
 def l1_loss(network_output, gt):
     return torch.abs((network_output - gt)).mean()
@@ -72,11 +73,21 @@ def msssim(rgb, gts):
     # assert (gts.max() <= 1.05 and gts.min() >= -0.05)
     return ms_ssim(rgb, gts).item()
 
-def pretrain_coefficient(coefficient, factor=0.98, factor_poly=0.990, p=0.5, offset=0.005, num_epochs=1000):
-    x = torch.linspace(0, 1, 1000).reshape(-1, 1).cuda()
-    y = factor_poly ** ((1 - x) ** p) - offset
-    
-    optimizer = torch.optim.Adam(coefficient.parameters(), lr=0.001)
+def pretrain_coefficient(coefficient, mode='linear', factor=0.98, p=0.5, offset=0.005, num_epochs=5000, lr=1e-3, weight_decay=1e-5):
+    x = torch.linspace(0, 1, 10000).reshape(-1, 1).cuda()
+    if mode == 'linear':
+        y = factor
+    elif mode == 'poly':
+        y = factor ** ((1 - x) ** p) - offset
+    elif mode == 'exp':
+        a = factor - offset
+        b = 1 - offset
+        if p != 0:
+            y = a + (b - a) * (1 - torch.exp(p * x)) / (1 - math.exp(p))
+        else:
+            y =  a + (b - a) * x
+ 
+    optimizer = torch.optim.Adam(coefficient.parameters(), lr=lr, weight_decay=weight_decay)
     criterion = nn.MSELoss()
     
     for epoch in tqdm(range(num_epochs), ncols=80):
